@@ -43,7 +43,11 @@ export const generateBusinessReport = async (data: BusinessData): Promise<string
       status: b.status
     })))}
     
-    Expenses: ${JSON.stringify(data.expenses)}
+    Expenses: ${JSON.stringify(data.expenses.map(e => ({
+      ...e,
+      paidBy: e.paidBy || 'Business'
+    })))}
+    
     Capital: ${JSON.stringify(data.capitalEntries)}
     Bros (Partners): ${JSON.stringify(data.bros)}
   `;
@@ -51,6 +55,8 @@ export const generateBusinessReport = async (data: BusinessData): Promise<string
   const prompt = `
     You are a savvy business consultant for a small used bike flipping business run by brothers (bros).
     Analyze the following financial data and provide a concise, actionable report.
+    
+    Note: Expenses paid by specific Bros (partners) are counted as Capital Contributions for them.
     
     Data:
     ${summary}

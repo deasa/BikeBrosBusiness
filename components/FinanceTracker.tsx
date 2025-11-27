@@ -1,6 +1,7 @@
+
 import React, { useState, useMemo } from 'react';
 import { Expense, CapitalEntry, CapitalType, Bro } from '../types';
-import { Plus, Trash2, Wallet, Receipt, Users, Edit2, Check, X } from 'lucide-react';
+import { Plus, Trash2, Wallet, Receipt, Users, Edit2, Check, X, CreditCard } from 'lucide-react';
 
 interface FinanceTrackerProps {
   expenses: Expense[];
@@ -19,13 +20,15 @@ export const FinanceTracker: React.FC<FinanceTrackerProps> = ({
   // Expense Form State
   const [expenseForm, setExpenseForm] = useState<Partial<Expense>>({
     date: new Date().toISOString().split('T')[0],
+    paidBy: 'Business'
   });
 
   // Capital Form State
   const [capitalForm, setCapitalForm] = useState<Partial<CapitalEntry>>({
     date: new Date().toISOString().split('T')[0],
     type: 'Contribution',
-    partnerName: bros.length > 0 ? bros[0].name : ''
+    partnerName: bros.length > 0 ? bros[0].name : '',
+    description: ''
   });
 
   // Bros Management State
@@ -36,13 +39,37 @@ export const FinanceTracker: React.FC<FinanceTrackerProps> = ({
 
   const handleAddExpense = () => {
     if (!expenseForm.amount || !expenseForm.description) return;
+    
+    const payer = expenseForm.paidBy || 'Business';
+    
     const newExpense: Expense = {
       ...expenseForm as Expense,
       id: crypto.randomUUID(),
-      category: 'General' // Default category since picker is removed
+      category: 'General', // Default category since picker is removed
+      paidBy: payer
     };
+    
     setExpenses(prev => [...prev, newExpense]);
-    setExpenseForm({ date: new Date().toISOString().split('T')[0], amount: 0, description: '' });
+
+    // If paid by a Bro, auto-add Capital Contribution
+    if (payer !== 'Business') {
+      const newCapital: CapitalEntry = {
+        id: crypto.randomUUID(),
+        partnerName: payer,
+        type: 'Contribution',
+        amount: newExpense.amount,
+        date: newExpense.date,
+        description: `Expense: ${newExpense.description}`
+      };
+      setCapital(prev => [...prev, newCapital]);
+    }
+
+    setExpenseForm({ 
+      date: new Date().toISOString().split('T')[0], 
+      amount: 0, 
+      description: '', 
+      paidBy: 'Business' 
+    });
   };
 
   const handleAddCapital = () => {
@@ -56,7 +83,8 @@ export const FinanceTracker: React.FC<FinanceTrackerProps> = ({
       date: new Date().toISOString().split('T')[0], 
       type: 'Contribution', 
       partnerName: bros.length > 0 ? bros[0].name : '', 
-      amount: 0 
+      amount: 0,
+      description: ''
     });
   };
 
@@ -145,6 +173,29 @@ export const FinanceTracker: React.FC<FinanceTrackerProps> = ({
                   placeholder="e.g. New wrench set"
                 />
               </div>
+              
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Paid By</label>
+                <div className="relative">
+                  <select
+                    value={expenseForm.paidBy}
+                    onChange={e => setExpenseForm({...expenseForm, paidBy: e.target.value})}
+                    className="w-full p-2 pl-9 border border-slate-300 rounded-lg text-sm appearance-none bg-white"
+                  >
+                    <option value="Business">Business Account</option>
+                    {bros.map(bro => (
+                      <option key={bro.id} value={bro.name}>{bro.name} (Investor)</option>
+                    ))}
+                  </select>
+                  <CreditCard size={16} className="absolute left-3 top-2.5 text-slate-400" />
+                </div>
+                {expenseForm.paidBy !== 'Business' && (
+                  <p className="text-xs text-blue-600 mt-1">
+                    * This will also record a capital contribution for {expenseForm.paidBy}.
+                  </p>
+                )}
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Amount ($)</label>
@@ -185,6 +236,7 @@ export const FinanceTracker: React.FC<FinanceTrackerProps> = ({
                   <tr>
                     <th className="p-4">Date</th>
                     <th className="p-4">Description</th>
+                    <th className="p-4">Paid By</th>
                     <th className="p-4 text-right">Amount</th>
                     <th className="p-4 w-10"></th>
                   </tr>
@@ -194,6 +246,15 @@ export const FinanceTracker: React.FC<FinanceTrackerProps> = ({
                     <tr key={exp.id} className="hover:bg-slate-50">
                       <td className="p-4 text-slate-600">{exp.date}</td>
                       <td className="p-4 font-medium text-slate-800">{exp.description}</td>
+                      <td className="p-4">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                          !exp.paidBy || exp.paidBy === 'Business' 
+                            ? 'bg-slate-100 text-slate-600' 
+                            : 'bg-indigo-100 text-indigo-700'
+                        }`}>
+                          {(!exp.paidBy || exp.paidBy === 'Business') ? 'Business' : exp.paidBy}
+                        </span>
+                      </td>
                       <td className="p-4 text-right font-medium text-slate-900">${exp.amount.toLocaleString()}</td>
                       <td className="p-4 text-right">
                         <button onClick={() => deleteExpense(exp.id)} className="text-slate-400 hover:text-red-600">
@@ -305,6 +366,7 @@ export const FinanceTracker: React.FC<FinanceTrackerProps> = ({
                     ))}
                   </select>
                 </div>
+                
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Transaction Type</label>
                   <select
@@ -316,6 +378,18 @@ export const FinanceTracker: React.FC<FinanceTrackerProps> = ({
                     <option value="Withdrawal">Withdrawal (Out)</option>
                   </select>
                 </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Description (Optional)</label>
+                  <input
+                    type="text"
+                    value={capitalForm.description || ''}
+                    onChange={e => setCapitalForm({...capitalForm, description: e.target.value})}
+                    className="w-full p-2 border border-slate-300 rounded-lg text-sm"
+                    placeholder="e.g. Initial investment"
+                  />
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Amount ($)</label>
@@ -354,6 +428,7 @@ export const FinanceTracker: React.FC<FinanceTrackerProps> = ({
                   <tr>
                     <th className="p-4">Date</th>
                     <th className="p-4">Bro</th>
+                    <th className="p-4">Description</th>
                     <th className="p-4">Type</th>
                     <th className="p-4 text-right">Amount</th>
                     <th className="p-4 w-10"></th>
@@ -364,6 +439,7 @@ export const FinanceTracker: React.FC<FinanceTrackerProps> = ({
                     <tr key={cap.id} className="hover:bg-slate-50">
                       <td className="p-4 text-slate-600">{cap.date}</td>
                       <td className="p-4 font-medium text-slate-800">{cap.partnerName}</td>
+                      <td className="p-4 text-slate-600 truncate max-w-[150px]">{cap.description || '-'}</td>
                       <td className="p-4">
                         <span className={`px-2 py-1 rounded text-xs ${
                           cap.type === 'Contribution' ? 'bg-indigo-100 text-indigo-700' : 'bg-orange-100 text-orange-700'
@@ -384,7 +460,7 @@ export const FinanceTracker: React.FC<FinanceTrackerProps> = ({
                     </tr>
                   ))}
                    {capital.length === 0 && (
-                    <tr><td colSpan={5} className="p-8 text-center text-slate-400">No capital history recorded.</td></tr>
+                    <tr><td colSpan={6} className="p-8 text-center text-slate-400">No capital history recorded.</td></tr>
                   )}
                 </tbody>
               </table>

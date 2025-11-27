@@ -1,3 +1,4 @@
+
 export type BikeStatus = 'Sold' | 'In Inventory' | 'Kept';
 
 export interface Bike {
@@ -19,6 +20,7 @@ export interface Expense {
   description: string;
   category: string;
   amount: number;
+  paidBy: string; // 'Business' or Bro Name
 }
 
 export type CapitalType = 'Contribution' | 'Withdrawal';
@@ -34,6 +36,7 @@ export interface CapitalEntry {
   type: CapitalType;
   amount: number;
   date: string;
+  description?: string;
 }
 
 export interface BusinessData {
