@@ -1,0 +1,5 @@
+{
+  "name": "Bike Bros Tracker",
+  "description": "A comprehensive business dashboard for bike flippers to track inventory, calculate profit/loss per unit, manage general expenses, and monitor capital contributions between partners. Includes AI-powered financial insights.",
+  "requestFramePermissions": []
+}
