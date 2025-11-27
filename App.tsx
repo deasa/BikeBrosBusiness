@@ -71,7 +71,7 @@ const App: React.FC = () => {
             }`}
           >
             <Bike size={20} />
-            <span className="font-medium">Bikes & Transactions</span>
+            <span className="font-medium">Bikes</span>
           </button>
           
           <button
@@ -116,7 +116,7 @@ const App: React.FC = () => {
           )}
 
           {activeView === 'inventory' && (
-            <BikeManager bikes={bikes} setBikes={setBikes} />
+            <BikeManager bikes={bikes} setBikes={setBikes} expenses={expenses} />
           )}
 
           {activeView === 'finance' && (
@@ -124,6 +124,7 @@ const App: React.FC = () => {
               expenses={expenses} setExpenses={setExpenses}
               capital={capital} setCapital={setCapital}
               bros={bros} setBros={setBros}
+              bikes={bikes}
             />
           )}
 

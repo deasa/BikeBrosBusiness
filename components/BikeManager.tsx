@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Bike, BikeStatus } from '../types';
+import { Bike, BikeStatus, Expense } from '../types';
 import { Plus, Tag, Calendar, DollarSign, PenTool, Trash2, Heart } from 'lucide-react';
 
 interface BikeManagerProps {
   bikes: Bike[];
   setBikes: React.Dispatch<React.SetStateAction<Bike[]>>;
+  expenses: Expense[];
 }
 
-export const BikeManager: React.FC<BikeManagerProps> = ({ bikes, setBikes }) => {
+export const BikeManager: React.FC<BikeManagerProps> = ({ bikes, setBikes, expenses }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBike, setEditingBike] = useState<Partial<Bike>>({});
   const [showCelebration, setShowCelebration] = useState(false);
@@ -69,12 +70,22 @@ export const BikeManager: React.FC<BikeManagerProps> = ({ bikes, setBikes }) => 
     }
   };
 
+  const getBikeExpenses = (bikeId: string) => {
+    return expenses.filter(e => e.bikeId === bikeId).reduce((sum, e) => sum + e.amount, 0);
+  };
+
+  const calculateTotalCost = (bike: Bike) => {
+    // Legacy otherCosts + buyPrice + linked expenses
+    return bike.buyPrice + (bike.otherCosts || 0) + getBikeExpenses(bike.id);
+  };
+
   const calculateProfit = (bike: Bike) => {
+    const totalCost = calculateTotalCost(bike);
     if (bike.status === 'Sold' && bike.sellPrice !== undefined) {
-      return bike.sellPrice - (bike.buyPrice + bike.otherCosts);
+      return bike.sellPrice - totalCost;
     }
     if (bike.status === 'Kept') {
-      return null; // Not really a profit or loss, it's a "lifestyle dividend"
+      return 0; // Treated as break-even (sold at cost)
     }
     return null;
   };
@@ -99,7 +110,7 @@ export const BikeManager: React.FC<BikeManagerProps> = ({ bikes, setBikes }) => 
       )}
 
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-slate-800">Inventory & Transactions</h2>
+        <h2 className="text-2xl font-bold text-slate-800">Bikes</h2>
         <button 
           onClick={() => handleOpenModal()}
           className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg hover:bg-slate-800 transition-colors"
@@ -126,9 +137,14 @@ export const BikeManager: React.FC<BikeManagerProps> = ({ bikes, setBikes }) => 
             <tbody className="divide-y divide-slate-100">
               {bikes.map(bike => {
                 const profit = calculateProfit(bike);
+                const totalCost = calculateTotalCost(bike);
+                
                 let statusColor = 'bg-yellow-100 text-yellow-800';
                 if (bike.status === 'Sold') statusColor = 'bg-green-100 text-green-800';
                 if (bike.status === 'Kept') statusColor = 'bg-pink-100 text-pink-800';
+
+                // For Kept bikes, sell price is conceptually equal to cost
+                const displaySellPrice = bike.status === 'Kept' ? totalCost : bike.sellPrice;
 
                 return (
                   <tr key={bike.id} className="hover:bg-slate-50 transition-colors">
@@ -144,17 +160,17 @@ export const BikeManager: React.FC<BikeManagerProps> = ({ bikes, setBikes }) => 
                     </td>
                     <td className="p-4 text-right text-sm text-slate-600">{bike.buyDate}</td>
                     <td className="p-4 text-right text-sm font-medium">
-                      ${(bike.buyPrice + bike.otherCosts).toLocaleString()}
+                      ${totalCost.toLocaleString()}
                     </td>
                     <td className="p-4 text-right text-sm text-slate-600">{bike.sellDate || '-'}</td>
                     <td className="p-4 text-right text-sm font-medium">
-                      {bike.sellPrice ? `$${bike.sellPrice.toLocaleString()}` : '-'}
+                      {displaySellPrice ? `$${displaySellPrice.toLocaleString()}` : '-'}
                     </td>
                     <td className={`p-4 text-right font-bold text-sm ${
                       profit !== null && profit > 0 ? 'text-green-600' : 
                       profit !== null && profit < 0 ? 'text-red-600' : 'text-slate-400'
                     }`}>
-                      {profit !== null ? `$${profit.toLocaleString()}` : (bike.status === 'Kept' ? '❤️' : '-')}
+                      {profit !== null ? `$${profit.toLocaleString()}` : '-'}
                     </td>
                     <td className="p-4 text-center">
                       <div className="flex justify-center gap-2">
@@ -230,16 +246,6 @@ export const BikeManager: React.FC<BikeManagerProps> = ({ bikes, setBikes }) => 
                     type="number" 
                     value={formData.buyPrice || ''} 
                     onChange={e => setFormData({...formData, buyPrice: parseFloat(e.target.value)})}
-                    className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Other Costs ($)</label>
-                  <input 
-                    type="number" 
-                    value={formData.otherCosts || 0} 
-                    onChange={e => setFormData({...formData, otherCosts: parseFloat(e.target.value)})}
                     className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                   />
                 </div>

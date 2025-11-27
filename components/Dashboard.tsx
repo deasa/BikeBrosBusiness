@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList, Cell
 } from 'recharts';
 import { Bike, Expense, CapitalEntry } from '../types';
 import { TrendingUp, DollarSign, Package, Heart, Wallet } from 'lucide-react';
@@ -13,32 +13,50 @@ interface DashboardProps {
 
 export const Dashboard: React.FC<DashboardProps> = ({ bikes, expenses, capital }) => {
   
+  const getBikeTotalCost = (bike: Bike) => {
+    const linkedExpenses = expenses.filter(e => e.bikeId === bike.id).reduce((sum, e) => sum + e.amount, 0);
+    return bike.buyPrice + (bike.otherCosts || 0) + linkedExpenses;
+  };
+
   const metrics = useMemo(() => {
     const soldBikes = bikes.filter(b => b.status === 'Sold');
     const inventoryBikes = bikes.filter(b => b.status === 'In Inventory');
     const keptBikes = bikes.filter(b => b.status === 'Kept');
 
-    // Net Profit Calculation (Accounting View)
-    const revenue = soldBikes.reduce((acc, b) => acc + (b.sellPrice || 0), 0);
-    const cogs = soldBikes.reduce((acc, b) => acc + b.buyPrice + b.otherCosts, 0);
-    const grossProfit = revenue - cogs;
-    const totalExpenses = expenses.reduce((acc, e) => acc + e.amount, 0);
-    const netProfit = grossProfit - totalExpenses;
+    // Revenue Calculation
+    // Revenue from Sold bikes
+    const revenueSold = soldBikes.reduce((acc, b) => acc + (b.sellPrice || 0), 0);
+    // Revenue from Kept bikes (Imputed Sale at Cost)
+    const revenueKept = keptBikes.reduce((acc, b) => acc + getBikeTotalCost(b), 0);
+    const totalRevenue = revenueSold + revenueKept;
 
-    const inventoryValue = inventoryBikes.reduce((acc, b) => acc + b.buyPrice + b.otherCosts, 0);
+    // COGS Calculation
+    const cogsSold = soldBikes.reduce((acc, b) => acc + getBikeTotalCost(b), 0);
+    const cogsKept = keptBikes.reduce((acc, b) => acc + getBikeTotalCost(b), 0);
+    const totalCogs = cogsSold + cogsKept;
+
+    const grossProfit = totalRevenue - totalCogs;
+    
+    // Only subtract expenses that are NOT linked to a specific bike (General Expenses)
+    // Linked expenses are already inside COGS
+    const generalExpenses = expenses.filter(e => !e.bikeId).reduce((acc, e) => acc + e.amount, 0);
+    
+    const netProfit = grossProfit - generalExpenses;
+
+    const inventoryValue = inventoryBikes.reduce((acc, b) => acc + getBikeTotalCost(b), 0);
 
     // Free Cash Calculation (Cash Flow View)
-    // Cash = (Capital In - Capital Out) + (Sales Revenue) - (Total Outflow for Bikes) - (Expenses)
+    // Cash = (Capital In - Capital Out) + (Total Revenue) - (Total Outflow for Bikes) - (Expenses)
     const capitalIn = capital.filter(c => c.type === 'Contribution').reduce((acc, c) => acc + c.amount, 0);
     const capitalOut = capital.filter(c => c.type === 'Withdrawal').reduce((acc, c) => acc + c.amount, 0);
     const netCapital = capitalIn - capitalOut;
 
-    const totalBikeOutflow = bikes.reduce((acc, b) => acc + b.buyPrice + b.otherCosts, 0); // Cost of ALL bikes (Sold, Inv, Kept)
+    // Total Cash Outflow for bikes (Buy Price + Linked Expenses)
+    const totalBikeOutflow = bikes.reduce((acc, b) => acc + getBikeTotalCost(b), 0);
     
-    // Note: If a bro paid for an expense, it is recorded as capital IN (+100) and expense (-100).
-    // So the Free Cash formula remains: Cash = Capital + Revenue - Costs - Expenses.
-    // The "Bro Paid" part cancels out in the free cash equation, correctly leaving business cash unchanged.
-    const freeCash = netCapital + revenue - totalBikeOutflow - totalExpenses;
+    // Note: Since 'revenueKept' is added to totalRevenue, and 'cogsKept' is part of totalBikeOutflow, 
+    // they cancel each other out in the cash flow, simulating that the Bro paid back the business for the bike.
+    const freeCash = netCapital + totalRevenue - totalBikeOutflow - generalExpenses;
 
     return { 
       soldCount: soldBikes.length, 
@@ -53,13 +71,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ bikes, expenses, capital }
   const profitData = useMemo(() => {
     return bikes
       .filter(b => b.status === 'Sold' || b.status === 'Kept')
-      .map(b => ({
-        name: b.nickname || b.model.substring(0, 15),
-        // Kept bikes have 0 "profit" for the chart, but we'll render a heart
-        profit: b.status === 'Kept' ? 0 : (b.sellPrice || 0) - (b.buyPrice + b.otherCosts),
-        status: b.status
-      }));
-  }, [bikes]);
+      .map(b => {
+        const totalCost = getBikeTotalCost(b);
+        return {
+          name: b.nickname || b.model.substring(0, 15),
+          // Kept bikes have 0 "profit" (sold at cost)
+          profit: b.status === 'Kept' ? 0 : (b.sellPrice || 0) - totalCost,
+          status: b.status
+        };
+      });
+  }, [bikes, expenses]);
 
   // Custom Label for the Bar Chart to show Hearts
   const CustomLabel = (props: any) => {
@@ -81,7 +102,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ bikes, expenses, capital }
     <div className="space-y-6 animate-fade-in">
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        {/* Free Cash Card - New! */}
+        {/* Free Cash Card */}
         <div className="bg-slate-900 p-6 rounded-xl shadow-md border border-slate-800 flex items-center space-x-4 text-white transform hover:scale-105 transition-transform">
           <div className="p-3 bg-slate-800 text-blue-400 rounded-full">
             <Wallet size={24} />
@@ -152,11 +173,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ bikes, expenses, capital }
                     cursor={{fill: '#f1f5f9'}}
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                     formatter={(value: number, name: string, props: any) => {
-                      if (props.payload.status === 'Kept') return ['Priceless (Kept)', 'Profit'];
-                      return [`$${value}`, 'Profit'];
+                      if (props.payload.status === 'Kept') return ['$0 (Break-even)', 'Profit'];
+                      return [`$${value.toLocaleString()}`, 'Profit'];
                     }}
                   />
-                  <Bar dataKey="profit" fill="#3b82f6" radius={[4, 4, 0, 0]}>
+                  <Bar dataKey="profit" radius={[4, 4, 0, 0]}>
+                    {profitData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.profit < 0 ? '#ef4444' : '#3b82f6'} />
+                    ))}
                     <LabelList dataKey="profit" content={<CustomLabel />} />
                   </Bar>
                 </BarChart>

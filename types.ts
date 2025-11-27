@@ -8,7 +8,7 @@ export interface Bike {
   status: BikeStatus;
   buyDate: string;
   buyPrice: number;
-  otherCosts: number;
+  otherCosts: number; // Kept for backward compatibility, though UI will hide it
   sellDate?: string;
   sellPrice?: number;
   notes?: string;
@@ -21,6 +21,7 @@ export interface Expense {
   category: string;
   amount: number;
   paidBy: string; // 'Business' or Bro Name
+  bikeId?: string; // Optional link to a specific bike
 }
 
 export type CapitalType = 'Contribution' | 'Withdrawal';
@@ -32,7 +33,7 @@ export interface Bro {
 
 export interface CapitalEntry {
   id: string;
-  partnerName: string; // This will now link to a Bro name or ID conceptually, but keeping string for simplicity in migration
+  partnerName: string; 
   type: CapitalType;
   amount: number;
   date: string;

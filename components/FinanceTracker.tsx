@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
-import { Expense, CapitalEntry, CapitalType, Bro } from '../types';
-import { Plus, Trash2, Wallet, Receipt, Users, Edit2, Check, X, CreditCard } from 'lucide-react';
+import { Expense, CapitalEntry, CapitalType, Bro, Bike } from '../types';
+import { Plus, Trash2, Wallet, Receipt, Users, Edit2, Check, X, CreditCard, Bike as BikeIcon } from 'lucide-react';
 
 interface FinanceTrackerProps {
   expenses: Expense[];
@@ -10,17 +10,19 @@ interface FinanceTrackerProps {
   setCapital: React.Dispatch<React.SetStateAction<CapitalEntry[]>>;
   bros: Bro[];
   setBros: React.Dispatch<React.SetStateAction<Bro[]>>;
+  bikes: Bike[];
 }
 
 export const FinanceTracker: React.FC<FinanceTrackerProps> = ({ 
-  expenses, setExpenses, capital, setCapital, bros, setBros 
+  expenses, setExpenses, capital, setCapital, bros, setBros, bikes
 }) => {
   const [activeTab, setActiveTab] = useState<'expenses' | 'capital'>('expenses');
   
   // Expense Form State
   const [expenseForm, setExpenseForm] = useState<Partial<Expense>>({
     date: new Date().toISOString().split('T')[0],
-    paidBy: 'Business'
+    paidBy: 'Business',
+    bikeId: ''
   });
 
   // Capital Form State
@@ -46,7 +48,8 @@ export const FinanceTracker: React.FC<FinanceTrackerProps> = ({
       ...expenseForm as Expense,
       id: crypto.randomUUID(),
       category: 'General', // Default category since picker is removed
-      paidBy: payer
+      paidBy: payer,
+      bikeId: expenseForm.bikeId || undefined // Ensure it's undefined if empty string
     };
     
     setExpenses(prev => [...prev, newExpense]);
@@ -68,7 +71,8 @@ export const FinanceTracker: React.FC<FinanceTrackerProps> = ({
       date: new Date().toISOString().split('T')[0], 
       amount: 0, 
       description: '', 
-      paidBy: 'Business' 
+      paidBy: 'Business',
+      bikeId: ''
     });
   };
 
@@ -114,6 +118,12 @@ export const FinanceTracker: React.FC<FinanceTrackerProps> = ({
 
   const deleteExpense = (id: string) => setExpenses(prev => prev.filter(e => e.id !== id));
   const deleteCapital = (id: string) => setCapital(prev => prev.filter(c => c.id !== id));
+
+  const getBikeName = (id?: string) => {
+    if (!id) return null;
+    const bike = bikes.find(b => b.id === id);
+    return bike ? (bike.nickname || bike.model) : 'Unknown Bike';
+  };
 
   // Partner Summary Calculation
   const partnerBalances = useMemo(() => {
@@ -174,6 +184,25 @@ export const FinanceTracker: React.FC<FinanceTrackerProps> = ({
                 />
               </div>
               
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Link to Bike (Optional)</label>
+                <div className="relative">
+                  <select
+                    value={expenseForm.bikeId || ''}
+                    onChange={e => setExpenseForm({...expenseForm, bikeId: e.target.value})}
+                    className="w-full p-2 pl-9 border border-slate-300 rounded-lg text-sm appearance-none bg-white"
+                  >
+                    <option value="">General Business Expense</option>
+                    {bikes.map(bike => (
+                      <option key={bike.id} value={bike.id}>
+                        {bike.nickname ? `${bike.nickname} (${bike.model})` : bike.model}
+                      </option>
+                    ))}
+                  </select>
+                  <BikeIcon size={16} className="absolute left-3 top-2.5 text-slate-400" />
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Paid By</label>
                 <div className="relative">
@@ -236,6 +265,7 @@ export const FinanceTracker: React.FC<FinanceTrackerProps> = ({
                   <tr>
                     <th className="p-4">Date</th>
                     <th className="p-4">Description</th>
+                    <th className="p-4">Related Bike</th>
                     <th className="p-4">Paid By</th>
                     <th className="p-4 text-right">Amount</th>
                     <th className="p-4 w-10"></th>
@@ -246,6 +276,13 @@ export const FinanceTracker: React.FC<FinanceTrackerProps> = ({
                     <tr key={exp.id} className="hover:bg-slate-50">
                       <td className="p-4 text-slate-600">{exp.date}</td>
                       <td className="p-4 font-medium text-slate-800">{exp.description}</td>
+                      <td className="p-4 text-slate-500 text-xs">
+                        {exp.bikeId ? (
+                           <span className="flex items-center gap-1">
+                             <BikeIcon size={12} /> {getBikeName(exp.bikeId)}
+                           </span>
+                        ) : '-'}
+                      </td>
                       <td className="p-4">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
                           !exp.paidBy || exp.paidBy === 'Business' 
@@ -264,7 +301,7 @@ export const FinanceTracker: React.FC<FinanceTrackerProps> = ({
                     </tr>
                   ))}
                   {expenses.length === 0 && (
-                    <tr><td colSpan={5} className="p-8 text-center text-slate-400">No expenses recorded.</td></tr>
+                    <tr><td colSpan={6} className="p-8 text-center text-slate-400">No expenses recorded.</td></tr>
                   )}
                 </tbody>
               </table>

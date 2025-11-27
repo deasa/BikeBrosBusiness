@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import { BusinessData } from "../types";
+import { BusinessData, Bike } from "../types";
 
 // Helper to format currency
 const formatCurrency = (amount: number) => {
@@ -14,38 +14,58 @@ export const generateBusinessReport = async (data: BusinessData): Promise<string
 
   const ai = new GoogleGenAI({ apiKey });
 
+  const getBikeTotalCost = (bike: Bike) => {
+    const linkedExpenses = data.expenses.filter(e => e.bikeId === bike.id).reduce((sum, e) => sum + e.amount, 0);
+    return bike.buyPrice + (bike.otherCosts || 0) + linkedExpenses;
+  };
+
   // Prepare a summary string for the prompt
   const soldBikes = data.bikes.filter(b => b.status === 'Sold');
   const inventoryBikes = data.bikes.filter(b => b.status === 'In Inventory');
   const keptBikes = data.bikes.filter(b => b.status === 'Kept');
   
-  const totalRevenue = soldBikes.reduce((sum, b) => sum + (b.sellPrice || 0), 0);
-  const totalCostOfGoodsSold = soldBikes.reduce((sum, b) => sum + b.buyPrice + b.otherCosts, 0);
+  // Revenue: Sold price + (Cost of Kept bikes, as they are "sold" at cost)
+  const revenueSold = soldBikes.reduce((sum, b) => sum + (b.sellPrice || 0), 0);
+  const revenueKept = keptBikes.reduce((sum, b) => sum + getBikeTotalCost(b), 0);
+  const totalRevenue = revenueSold + revenueKept;
+
+  // COGS: Cost of Sold + Cost of Kept
+  const cogsSold = soldBikes.reduce((sum, b) => sum + getBikeTotalCost(b), 0);
+  const cogsKept = keptBikes.reduce((sum, b) => sum + getBikeTotalCost(b), 0);
+  const totalCostOfGoodsSold = cogsSold + cogsKept;
+  
   const grossProfit = totalRevenue - totalCostOfGoodsSold;
   
-  const totalExpenses = data.expenses.reduce((sum, e) => sum + e.amount, 0);
-  const netIncome = grossProfit - totalExpenses;
+  // General expenses are those NOT tied to a specific bike
+  const generalExpenses = data.expenses.filter(e => !e.bikeId).reduce((sum, e) => sum + e.amount, 0);
+  
+  const netIncome = grossProfit - generalExpenses;
 
   const summary = `
     Business Financial Summary:
     - Total Sold Bikes: ${soldBikes.length}
     - Current Inventory Count: ${inventoryBikes.length}
-    - Bikes Kept for Personal Use: ${keptBikes.length}
-    - Gross Profit from Sales: ${formatCurrency(grossProfit)}
-    - Total General Expenses: ${formatCurrency(totalExpenses)}
+    - Bikes Kept for Personal Use: ${keptBikes.length} (Treated as break-even sales)
+    - Gross Profit from Sales (Revenue - COGS): ${formatCurrency(grossProfit)}
+    - Total General Expenses (Not tied to bikes): ${formatCurrency(generalExpenses)}
     - Net Business Income: ${formatCurrency(netIncome)}
     
-    Bike Details: ${JSON.stringify(data.bikes.map(b => ({
-      model: b.model,
-      buy: b.buyPrice,
-      sell: b.sellPrice,
-      profit: b.status === 'Sold' ? (b.sellPrice || 0) - (b.buyPrice + b.otherCosts) : 'N/A',
-      status: b.status
-    })))}
+    Bike Details: ${JSON.stringify(data.bikes.map(b => {
+      const totalCost = getBikeTotalCost(b);
+      return {
+        model: b.model,
+        buy: b.buyPrice,
+        totalCost: totalCost,
+        sell: b.status === 'Kept' ? totalCost : b.sellPrice,
+        profit: b.status === 'Sold' ? (b.sellPrice || 0) - totalCost : (b.status === 'Kept' ? 0 : 'N/A'),
+        status: b.status
+      };
+    }))}
     
     Expenses: ${JSON.stringify(data.expenses.map(e => ({
       ...e,
-      paidBy: e.paidBy || 'Business'
+      paidBy: e.paidBy || 'Business',
+      linkedBike: e.bikeId ? 'Yes' : 'No'
     })))}
     
     Capital: ${JSON.stringify(data.capitalEntries)}
@@ -57,6 +77,8 @@ export const generateBusinessReport = async (data: BusinessData): Promise<string
     Analyze the following financial data and provide a concise, actionable report.
     
     Note: Expenses paid by specific Bros (partners) are counted as Capital Contributions for them.
+    Note: Bikes "Kept" for personal use are treated as break-even sales (Sold at Cost) for accounting purposes, resulting in $0 profit but reimbursing the cash flow.
+    Note: Some expenses are linked to specific bikes, increasing their Cost of Goods Sold (COGS).
     
     Data:
     ${summary}
@@ -67,7 +89,7 @@ export const generateBusinessReport = async (data: BusinessData): Promise<string
     3. **Operational Advice**: specific advice based on the expenses or capital flow.
     4. **The "Ride" Ahead**: A motivational closing sentence using bike puns.
 
-    Keep it professional but encouraging. If bikes were "Kept", mention that it's a perk of the job but affects cash flow.
+    Keep it professional but encouraging. Mention the kept bikes as a perk.
   `;
 
   try {
