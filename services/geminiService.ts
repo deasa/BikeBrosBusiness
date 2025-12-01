@@ -41,6 +41,41 @@ export const generateBusinessReport = async (data: BusinessData): Promise<string
   
   const netIncome = grossProfit - generalExpenses;
 
+  // SANITIZATION: Explicitly construct simple objects to avoid circular references (DOM nodes, etc.)
+  // occurring during JSON.stringify. We convert values to primitives explicitly.
+  const sanitizedBikes = data.bikes.map(b => {
+    const totalCost = getBikeTotalCost(b);
+    return {
+      model: String(b.model || 'Unknown'),
+      buy: Number(b.buyPrice || 0),
+      totalCost: Number(totalCost),
+      sell: b.status === 'Kept' ? Number(totalCost) : Number(b.sellPrice || 0),
+      profit: b.status === 'Sold' ? (Number(b.sellPrice || 0) - totalCost) : (b.status === 'Kept' ? 0 : 'N/A'),
+      status: String(b.status)
+    };
+  });
+
+  const sanitizedExpenses = data.expenses.map(e => ({
+    date: String(e.date),
+    amount: Number(e.amount),
+    category: String(e.category),
+    description: String(e.description),
+    paidBy: String(e.paidBy || 'Business'),
+    linkedBike: e.bikeId ? 'Yes' : 'No'
+  }));
+
+  const sanitizedCapital = data.capitalEntries.map(c => ({
+    date: String(c.date),
+    type: String(c.type),
+    amount: Number(c.amount),
+    partnerName: String(c.partnerName),
+    description: String(c.description || '')
+  }));
+
+  const sanitizedBros = data.bros.map(b => ({
+    name: String(b.name)
+  }));
+
   const summary = `
     Business Financial Summary:
     - Total Sold Bikes: ${soldBikes.length}
@@ -50,26 +85,12 @@ export const generateBusinessReport = async (data: BusinessData): Promise<string
     - Total General Expenses (Not tied to bikes): ${formatCurrency(generalExpenses)}
     - Net Business Income: ${formatCurrency(netIncome)}
     
-    Bike Details: ${JSON.stringify(data.bikes.map(b => {
-      const totalCost = getBikeTotalCost(b);
-      return {
-        model: b.model,
-        buy: b.buyPrice,
-        totalCost: totalCost,
-        sell: b.status === 'Kept' ? totalCost : b.sellPrice,
-        profit: b.status === 'Sold' ? (b.sellPrice || 0) - totalCost : (b.status === 'Kept' ? 0 : 'N/A'),
-        status: b.status
-      };
-    }))}
+    Bike Details: ${JSON.stringify(sanitizedBikes)}
     
-    Expenses: ${JSON.stringify(data.expenses.map(e => ({
-      ...e,
-      paidBy: e.paidBy || 'Business',
-      linkedBike: e.bikeId ? 'Yes' : 'No'
-    })))}
+    Expenses: ${JSON.stringify(sanitizedExpenses)}
     
-    Capital: ${JSON.stringify(data.capitalEntries)}
-    Bros (Partners): ${JSON.stringify(data.bros)}
+    Capital: ${JSON.stringify(sanitizedCapital)}
+    Bros (Partners): ${JSON.stringify(sanitizedBros)}
   `;
 
   const prompt = `

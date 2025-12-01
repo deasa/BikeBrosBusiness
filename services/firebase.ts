@@ -1,4 +1,5 @@
-import * as firebaseApp from "firebase/app";
+
+import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 
 // TODO: REPLACE THIS WITH YOUR FIREBASE CONFIG
@@ -19,6 +20,6 @@ if (firebaseConfig.apiKey === "AIzaSy..." || firebaseConfig.projectId === "your-
   alert("Configuration Error: You need to update services/firebase.ts with your real Firebase API keys for the app to work.");
 }
 
-// Initialize Firebase
-const app = firebaseApp.initializeApp(firebaseConfig);
+// Initialize Firebase using the modular SDK syntax
+const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);

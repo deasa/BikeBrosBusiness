@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Expense, CapitalEntry, CapitalType, Bro, Bike } from '../types';
-import { Plus, Trash2, Wallet, Receipt, Users, Edit2, Check, X, CreditCard, Bike as BikeIcon } from 'lucide-react';
+import { Plus, Trash2, Wallet, Receipt, Users, Edit2, Check, X, CreditCard, Bike as BikeIcon, AlertTriangle } from 'lucide-react';
 import { addItem, updateItem, deleteItem, COLLECTIONS } from '../services/firestoreService';
 
 interface FinanceTrackerProps {
@@ -35,6 +35,9 @@ export const FinanceTracker: React.FC<FinanceTrackerProps> = ({
   const [newBroName, setNewBroName] = useState('');
   const [editingBroId, setEditingBroId] = useState<string | null>(null);
   const [editBroName, setEditBroName] = useState('');
+
+  // Delete confirmations
+  const [confirmDeleteBroId, setConfirmDeleteBroId] = useState<string | null>(null);
 
   const handleAddExpense = async () => {
     if (!expenseForm.amount || !expenseForm.description) return;
@@ -98,9 +101,16 @@ export const FinanceTracker: React.FC<FinanceTrackerProps> = ({
     setNewBroName('');
   };
 
-  const handleDeleteBro = async (id: string) => {
-    if (confirm('Are you sure? This will not delete their transaction history, but they will be removed from the list.')) {
-      await deleteItem(COLLECTIONS.BROS, id);
+  const initiateDeleteBro = (id: string) => {
+    if (confirmDeleteBroId === id) {
+       // Second click - actually delete
+       deleteItem(COLLECTIONS.BROS, id);
+       setConfirmDeleteBroId(null);
+    } else {
+       // First click - ask for confirmation
+       setConfirmDeleteBroId(id);
+       // Auto reset after 3 seconds
+       setTimeout(() => setConfirmDeleteBroId(null), 3000);
     }
   };
 
@@ -359,7 +369,16 @@ export const FinanceTracker: React.FC<FinanceTrackerProps> = ({
                     {!editingBroId && (
                       <div className="flex items-center gap-2">
                         <button onClick={() => startEditBro(bro)} className="text-slate-400 hover:text-indigo-600"><Edit2 size={16}/></button>
-                        <button onClick={() => handleDeleteBro(bro.id)} className="text-slate-400 hover:text-red-600"><Trash2 size={16}/></button>
+                        <button 
+                          onClick={() => initiateDeleteBro(bro.id)} 
+                          className={`p-1 rounded transition-colors ${
+                            confirmDeleteBroId === bro.id 
+                            ? 'text-red-600 bg-red-100 font-bold px-2' 
+                            : 'text-slate-400 hover:text-red-600'
+                          }`}
+                        >
+                          {confirmDeleteBroId === bro.id ? 'Sure?' : <Trash2 size={16}/>}
+                        </button>
                       </div>
                     )}
                   </div>

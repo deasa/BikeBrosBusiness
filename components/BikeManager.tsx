@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Bike, BikeStatus, Expense } from '../types';
-import { Plus, Tag, Calendar, DollarSign, PenTool, Trash2, Heart } from 'lucide-react';
+import { Plus, PenTool, Trash2, Heart, Loader2, AlertTriangle } from 'lucide-react';
 import { addItem, updateItem, deleteItem, COLLECTIONS } from '../services/firestoreService';
 
 interface BikeManagerProps {
@@ -12,6 +12,10 @@ export const BikeManager: React.FC<BikeManagerProps> = ({ bikes, expenses }) => 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBike, setEditingBike] = useState<Partial<Bike>>({});
   const [showCelebration, setShowCelebration] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  
+  // Custom Delete Confirmation State
+  const [deleteConfirmationId, setDeleteConfirmationId] = useState<string | null>(null);
   
   // Form State
   const [formData, setFormData] = useState<Partial<Bike>>({
@@ -27,7 +31,8 @@ export const BikeManager: React.FC<BikeManagerProps> = ({ bikes, expenses }) => 
     }
   }, [showCelebration]);
 
-  const handleOpenModal = (bike?: Bike) => {
+  const handleOpenModal = (e?: React.MouseEvent, bike?: Bike) => {
+    if (e && e.stopPropagation) e.stopPropagation();
     if (bike) {
       setFormData(bike);
       setEditingBike(bike);
@@ -64,13 +69,47 @@ export const BikeManager: React.FC<BikeManagerProps> = ({ bikes, expenses }) => 
       }
       setIsModalOpen(false);
     } catch (error) {
+      console.error("Save error:", error);
       alert("Failed to save bike. Check console.");
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to delete this bike record?')) {
+  const initiateDelete = (e: React.MouseEvent, id: string) => {
+    if (e && e.stopPropagation) e.stopPropagation();
+    setDeleteConfirmationId(id);
+  };
+
+  const confirmDelete = async () => {
+    const id = deleteConfirmationId;
+    if (!id) return;
+
+    setDeletingId(id);
+    setDeleteConfirmationId(null); // Close modal
+
+    try {
+      // 1. Unlink linked expenses first so they don't become ghost expenses
+      const linkedExpenses = expenses.filter(exp => exp.bikeId === id);
+      
+      console.log(`Unlinking ${linkedExpenses.length} expenses for bike ${id}`);
+
+      // We use Promise.allSettled or just individual try/catch to ensure one failure doesn't stop everything
+      await Promise.all(linkedExpenses.map(async (expense) => {
+        try {
+          await updateItem(COLLECTIONS.EXPENSES, expense.id, { bikeId: "" });
+        } catch (err) {
+          console.warn(`Warning: Failed to unlink expense ${expense.id}. Proceeding anyway.`, err);
+        }
+      }));
+
+      // 2. Delete the bike
+      console.log(`Deleting bike doc ${id}`);
       await deleteItem(COLLECTIONS.BIKES, id);
+      console.log(`Successfully deleted bike ${id}`);
+    } catch (error) {
+      console.error("Delete failed completely", error);
+      alert(`Failed to delete bike. Error: ${(error as Error).message}`);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -113,10 +152,41 @@ export const BikeManager: React.FC<BikeManagerProps> = ({ bikes, expenses }) => 
         </div>
       )}
 
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmationId && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6 border border-slate-200">
+            <div className="flex flex-col items-center text-center">
+              <div className="p-3 bg-red-100 text-red-600 rounded-full mb-4">
+                <AlertTriangle size={32} />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 mb-2">Delete this bike?</h3>
+              <p className="text-slate-500 mb-6">
+                This will permanently remove the bike. Any linked expenses will be unlinked but kept in the ledger.
+              </p>
+              <div className="flex gap-3 w-full">
+                <button 
+                  onClick={() => setDeleteConfirmationId(null)}
+                  className="flex-1 py-2 bg-slate-100 text-slate-700 font-bold rounded-lg hover:bg-slate-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={confirmDelete}
+                  className="flex-1 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition-colors shadow-lg shadow-red-900/20"
+                >
+                  Yes, Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-slate-800">Bikes</h2>
         <button 
-          onClick={() => handleOpenModal()}
+          onClick={(e) => handleOpenModal(e)}
           className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg hover:bg-slate-800 transition-colors"
         >
           <Plus size={20} /> Add Bike
@@ -178,22 +248,33 @@ export const BikeManager: React.FC<BikeManagerProps> = ({ bikes, expenses }) => 
                     </td>
                     <td className="p-4 text-center">
                       <div className="flex justify-center gap-2">
-                        <button onClick={() => handleOpenModal(bike)} className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md">
+                        <button onClick={(e) => handleOpenModal(e, bike)} className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md">
                           <PenTool size={16} />
                         </button>
-                        <button onClick={() => handleDelete(bike.id)} className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-md">
-                          <Trash2 size={16} />
+                        <button 
+                          onClick={(e) => initiateDelete(e, bike.id)} 
+                          className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-md disabled:opacity-50"
+                          disabled={deletingId === bike.id}
+                        >
+                          {deletingId === bike.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
                         </button>
                       </div>
                     </td>
                   </tr>
                 );
               })}
+              {bikes.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="p-8 text-center text-slate-400">
+                    No bikes found. Click "Add Bike" to start tracking!
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
-
+      
       {/* Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
