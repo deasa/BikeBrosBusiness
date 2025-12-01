@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Bike, BikeStatus, Expense } from '../types';
 import { Plus, Tag, Calendar, DollarSign, PenTool, Trash2, Heart } from 'lucide-react';
+import { addItem, updateItem, deleteItem, COLLECTIONS } from '../services/firestoreService';
 
 interface BikeManagerProps {
   bikes: Bike[];
-  setBikes: React.Dispatch<React.SetStateAction<Bike[]>>;
   expenses: Expense[];
 }
 
-export const BikeManager: React.FC<BikeManagerProps> = ({ bikes, setBikes, expenses }) => {
+export const BikeManager: React.FC<BikeManagerProps> = ({ bikes, expenses }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBike, setEditingBike] = useState<Partial<Bike>>({});
   const [showCelebration, setShowCelebration] = useState(false);
@@ -43,7 +43,7 @@ export const BikeManager: React.FC<BikeManagerProps> = ({ bikes, setBikes, expen
     setIsModalOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.model || !formData.buyPrice) return; // Simple validation
 
     const newBike = formData as Bike;
@@ -54,19 +54,23 @@ export const BikeManager: React.FC<BikeManagerProps> = ({ bikes, setBikes, expen
       setShowCelebration(true);
     }
 
-    setBikes(prev => {
-      const exists = prev.find(b => b.id === newBike.id);
-      if (exists) {
-        return prev.map(b => b.id === newBike.id ? newBike : b);
+    try {
+      if (oldBike) {
+        // Update existing
+        await updateItem(COLLECTIONS.BIKES, newBike.id, newBike);
+      } else {
+        // Add new
+        await addItem(COLLECTIONS.BIKES, newBike);
       }
-      return [...prev, newBike];
-    });
-    setIsModalOpen(false);
+      setIsModalOpen(false);
+    } catch (error) {
+      alert("Failed to save bike. Check console.");
+    }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Are you sure you want to delete this bike record?')) {
-      setBikes(prev => prev.filter(b => b.id !== id));
+      await deleteItem(COLLECTIONS.BIKES, id);
     }
   };
 

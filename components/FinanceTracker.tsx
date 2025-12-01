@@ -1,20 +1,17 @@
-
 import React, { useState, useMemo } from 'react';
 import { Expense, CapitalEntry, CapitalType, Bro, Bike } from '../types';
 import { Plus, Trash2, Wallet, Receipt, Users, Edit2, Check, X, CreditCard, Bike as BikeIcon } from 'lucide-react';
+import { addItem, updateItem, deleteItem, COLLECTIONS } from '../services/firestoreService';
 
 interface FinanceTrackerProps {
   expenses: Expense[];
-  setExpenses: React.Dispatch<React.SetStateAction<Expense[]>>;
   capital: CapitalEntry[];
-  setCapital: React.Dispatch<React.SetStateAction<CapitalEntry[]>>;
   bros: Bro[];
-  setBros: React.Dispatch<React.SetStateAction<Bro[]>>;
   bikes: Bike[];
 }
 
 export const FinanceTracker: React.FC<FinanceTrackerProps> = ({ 
-  expenses, setExpenses, capital, setCapital, bros, setBros, bikes
+  expenses, capital, bros, bikes
 }) => {
   const [activeTab, setActiveTab] = useState<'expenses' | 'capital'>('expenses');
   
@@ -39,7 +36,7 @@ export const FinanceTracker: React.FC<FinanceTrackerProps> = ({
   const [editingBroId, setEditingBroId] = useState<string | null>(null);
   const [editBroName, setEditBroName] = useState('');
 
-  const handleAddExpense = () => {
+  const handleAddExpense = async () => {
     if (!expenseForm.amount || !expenseForm.description) return;
     
     const payer = expenseForm.paidBy || 'Business';
@@ -47,12 +44,12 @@ export const FinanceTracker: React.FC<FinanceTrackerProps> = ({
     const newExpense: Expense = {
       ...expenseForm as Expense,
       id: crypto.randomUUID(),
-      category: 'General', // Default category since picker is removed
+      category: 'General', 
       paidBy: payer,
-      bikeId: expenseForm.bikeId || undefined // Ensure it's undefined if empty string
+      bikeId: expenseForm.bikeId || undefined 
     };
     
-    setExpenses(prev => [...prev, newExpense]);
+    await addItem(COLLECTIONS.EXPENSES, newExpense);
 
     // If paid by a Bro, auto-add Capital Contribution
     if (payer !== 'Business') {
@@ -64,7 +61,7 @@ export const FinanceTracker: React.FC<FinanceTrackerProps> = ({
         date: newExpense.date,
         description: `Expense: ${newExpense.description}`
       };
-      setCapital(prev => [...prev, newCapital]);
+      await addItem(COLLECTIONS.CAPITAL, newCapital);
     }
 
     setExpenseForm({ 
@@ -76,13 +73,14 @@ export const FinanceTracker: React.FC<FinanceTrackerProps> = ({
     });
   };
 
-  const handleAddCapital = () => {
+  const handleAddCapital = async () => {
     if (!capitalForm.amount || !capitalForm.partnerName) return;
     const newEntry: CapitalEntry = {
       ...capitalForm as CapitalEntry,
       id: crypto.randomUUID()
     };
-    setCapital(prev => [...prev, newEntry]);
+    await addItem(COLLECTIONS.CAPITAL, newEntry);
+    
     setCapitalForm({ 
       date: new Date().toISOString().split('T')[0], 
       type: 'Contribution', 
@@ -93,15 +91,16 @@ export const FinanceTracker: React.FC<FinanceTrackerProps> = ({
   };
 
   // Bro Management Handlers
-  const handleAddBro = () => {
+  const handleAddBro = async () => {
     if (!newBroName.trim()) return;
-    setBros(prev => [...prev, { id: crypto.randomUUID(), name: newBroName.trim() }]);
+    const newBro = { id: crypto.randomUUID(), name: newBroName.trim() };
+    await addItem(COLLECTIONS.BROS, newBro);
     setNewBroName('');
   };
 
-  const handleDeleteBro = (id: string) => {
+  const handleDeleteBro = async (id: string) => {
     if (confirm('Are you sure? This will not delete their transaction history, but they will be removed from the list.')) {
-      setBros(prev => prev.filter(b => b.id !== id));
+      await deleteItem(COLLECTIONS.BROS, id);
     }
   };
 
@@ -110,14 +109,14 @@ export const FinanceTracker: React.FC<FinanceTrackerProps> = ({
     setEditBroName(bro.name);
   };
 
-  const saveEditBro = () => {
-    if (!editBroName.trim()) return;
-    setBros(prev => prev.map(b => b.id === editingBroId ? { ...b, name: editBroName } : b));
+  const saveEditBro = async () => {
+    if (!editBroName.trim() || !editingBroId) return;
+    await updateItem(COLLECTIONS.BROS, editingBroId, { name: editBroName });
     setEditingBroId(null);
   };
 
-  const deleteExpense = (id: string) => setExpenses(prev => prev.filter(e => e.id !== id));
-  const deleteCapital = (id: string) => setCapital(prev => prev.filter(c => c.id !== id));
+  const deleteExpense = (id: string) => deleteItem(COLLECTIONS.EXPENSES, id);
+  const deleteCapital = (id: string) => deleteItem(COLLECTIONS.CAPITAL, id);
 
   const getBikeName = (id?: string) => {
     if (!id) return null;

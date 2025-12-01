@@ -1,47 +1,41 @@
 import React, { useState, useEffect } from 'react';
 import { LayoutDashboard, Bike, PieChart, Sparkles } from 'lucide-react';
-import { INITIAL_BIKES, INITIAL_EXPENSES, INITIAL_CAPITAL, INITIAL_BROS } from './constants';
 import { Bike as BikeType, Expense, CapitalEntry, Bro } from './types';
 import { Dashboard } from './components/Dashboard';
 import { BikeManager } from './components/BikeManager';
 import { FinanceTracker } from './components/FinanceTracker';
 import { AIModal } from './components/AIModal';
-
-// Local Storage Helper
-const useLocalStorage = <T,>(key: string, initialValue: T): [T, React.Dispatch<React.SetStateAction<T>>] => {
-  const [storedValue, setStoredValue] = useState<T>(() => {
-    try {
-      const item = window.localStorage.getItem(key);
-      return item ? JSON.parse(item) : initialValue;
-    } catch (error) {
-      console.error(error);
-      return initialValue;
-    }
-  });
-
-  const setValue = (value: T | ((val: T) => T)) => {
-    try {
-      const valueToStore = value instanceof Function ? value(storedValue) : value;
-      setStoredValue(valueToStore);
-      window.localStorage.setItem(key, JSON.stringify(valueToStore));
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  return [storedValue, setValue];
-};
+import { subscribeToCollection, COLLECTIONS } from './services/firestoreService';
 
 const App: React.FC = () => {
   const [activeView, setActiveView] = useState<'dashboard' | 'inventory' | 'finance'>('dashboard');
   
-  // State
-  const [bikes, setBikes] = useLocalStorage<BikeType[]>('bikebros_bikes', INITIAL_BIKES);
-  const [expenses, setExpenses] = useLocalStorage<Expense[]>('bikebros_expenses', INITIAL_EXPENSES);
-  const [capital, setCapital] = useLocalStorage<CapitalEntry[]>('bikebros_capital', INITIAL_CAPITAL);
-  const [bros, setBros] = useLocalStorage<Bro[]>('bikebros_bros', INITIAL_BROS);
+  // State is now managed by Firestore subscriptions
+  const [bikes, setBikes] = useState<BikeType[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [capital, setCapital] = useState<CapitalEntry[]>([]);
+  const [bros, setBros] = useState<Bro[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+
+  // Set up real-time listeners
+  useEffect(() => {
+    const unsubBikes = subscribeToCollection(COLLECTIONS.BIKES, (data) => setBikes(data as BikeType[]));
+    const unsubExpenses = subscribeToCollection(COLLECTIONS.EXPENSES, (data) => setExpenses(data as Expense[]));
+    const unsubCapital = subscribeToCollection(COLLECTIONS.CAPITAL, (data) => setCapital(data as CapitalEntry[]));
+    const unsubBros = subscribeToCollection(COLLECTIONS.BROS, (data) => setBros(data as Bro[]));
+
+    setLoading(false);
+
+    // Cleanup listeners on unmount
+    return () => {
+      unsubBikes();
+      unsubExpenses();
+      unsubCapital();
+      unsubBros();
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
@@ -116,14 +110,14 @@ const App: React.FC = () => {
           )}
 
           {activeView === 'inventory' && (
-            <BikeManager bikes={bikes} setBikes={setBikes} expenses={expenses} />
+            <BikeManager bikes={bikes} expenses={expenses} />
           )}
 
           {activeView === 'finance' && (
             <FinanceTracker 
-              expenses={expenses} setExpenses={setExpenses}
-              capital={capital} setCapital={setCapital}
-              bros={bros} setBros={setBros}
+              expenses={expenses}
+              capital={capital}
+              bros={bros}
               bikes={bikes}
             />
           )}
